@@ -14,13 +14,16 @@ import dad.javafx.geofx.messages.Language;
 import dad.javafx.geofx.messages.RootMessage;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
@@ -66,6 +69,9 @@ public class RootController implements Initializable{
 	LocalizationService localizationService;
 	RootMessage data;
 	
+	private Task<String> tarea;
+	private Task<RootMessage> tarea2;
+	
 	public RootController() throws IOException, IPServiceException, GeoServiceException {
 		FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/GeoFX.fxml"));
 		loader.setController(this);
@@ -76,13 +82,10 @@ public class RootController implements Initializable{
 		ipservice = new IPService();
 		localizationService = new LocalizationService();
 		
-		ipText.setText(ipservice.getIP());
-		setLocalizationIP();
+		getIPTask();
+		
 		ipText.textProperty().addListener(e -> setLocalizationIP());
-		
-		data = localizationService.getData();
-		fillData();
-		
+				
 		imageView.setImage(new Image(getClass().getResource("/icons/Wifi-icon.png").toString()));
 		
 		locationTab.setContent(locationController.getRoot());
@@ -91,6 +94,47 @@ public class RootController implements Initializable{
 	}
 	private void setLocalizationIP() {
 		localizationService.setIp(ipText.getText());
+	}
+	public void getDataTask() {
+		tarea2 = new Task<RootMessage>() {
+			protected RootMessage call() throws Exception {
+				return localizationService.getData();
+				}
+		};
+		tarea2.setOnFailed(e -> {
+			e.getSource().getException().printStackTrace();
+			Alert alert = new Alert(AlertType.ERROR);
+			alert.setTitle("Error");
+			alert.setHeaderText("todomal");
+			alert.setContentText(e.getSource().getException().getMessage());
+			alert.showAndWait();
+		});
+		tarea2.setOnSucceeded(e->{
+			data = tarea2.getValue();
+			fillData();
+		});
+		new Thread(tarea2).start();
+	}
+	public void getIPTask() {
+		tarea = new Task<String>() {
+			protected String call() throws Exception {
+				return ipservice.getIP();
+				}
+		};
+		tarea.setOnFailed(e -> {
+			e.getSource().getException().printStackTrace();
+			Alert alert = new Alert(AlertType.ERROR);
+			alert.setTitle("Error");
+			alert.setHeaderText("todomal");
+			alert.setContentText(e.getSource().getException().getMessage());
+			alert.showAndWait();
+		});
+		tarea.setOnSucceeded(e->{
+			ipText.setText(tarea.getValue());
+			setLocalizationIP();
+			getDataTask();
+		});
+		new Thread(tarea).start();
 	}
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
@@ -111,13 +155,15 @@ public class RootController implements Initializable{
 	
 	private void onButtonClick() {
 		setLocalizationIP();
-		try {
-			data = localizationService.getData();
-		} catch (GeoServiceException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		fillData();
+		getDataTask();
+//		
+//		try {
+//			data = localizationService.getData();
+//		} catch (GeoServiceException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//		fillData();
 	}
 	private void fillData() {
 		latitudeProperty.set(Double.toString(data.getLatitude()));
